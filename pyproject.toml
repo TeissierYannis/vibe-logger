@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vibe-logger"
+version = "0.1.0"
+description = "CLI stats dashboard & gamification for Mistral Vibe Code sessions"
+requires-python = ">=3.11"
+dependencies = ["click>=8.0", "rich>=13.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0"]
+
+[project.scripts]
+vibe-logger = "vibe_logger.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]

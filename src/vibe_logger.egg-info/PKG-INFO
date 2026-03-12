@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: vibe-logger
+Version: 0.1.0
+Summary: CLI stats dashboard & gamification for Mistral Vibe Code sessions
+Requires-Python: >=3.11
+Requires-Dist: click>=8.0
+Requires-Dist: rich>=13.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0; extra == "dev"

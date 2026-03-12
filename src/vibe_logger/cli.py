@@ -20,12 +20,20 @@ def cli(ctx: click.Context, path: str | None) -> None:
 
 
 @cli.command()
+@click.option("--no-watch", is_flag=True, default=False,
+              help="Disable auto-refresh (load sessions once)")
 @click.pass_context
-def dashboard(ctx: click.Context) -> None:
-    """Interactive stats dashboard."""
+def dashboard(ctx: click.Context, no_watch: bool) -> None:
+    """Interactive stats dashboard (auto-refreshes by default)."""
     from .ui.dashboard import Dashboard
-    sessions = load_sessions(ctx.obj["sessions_dir"])
-    Dashboard(sessions).run()
+
+    if no_watch:
+        sessions = load_sessions(ctx.obj["sessions_dir"])
+        Dashboard(sessions=sessions).run()
+    else:
+        from .watcher import SessionWatcher
+        watcher = SessionWatcher(ctx.obj["sessions_dir"])
+        Dashboard(watcher=watcher).run()
 
 
 @cli.command()
@@ -36,6 +44,37 @@ def sessions(ctx: click.Context) -> None:
     sessions_dir = ctx.obj["sessions_dir"]
     all_sessions = load_sessions(sessions_dir)
     SessionViewer(all_sessions, sessions_dir).run()
+
+
+@cli.command()
+@click.option("--session-id", default=None, help="Session directory name to follow")
+@click.pass_context
+def live(ctx: click.Context, session_id: str | None) -> None:
+    """Follow a session in real-time (tail -f style)."""
+    from .watcher import SessionWatcher
+    from .ui.live_session import LiveSessionView
+
+    console = Console()
+    sessions_dir = ctx.obj["sessions_dir"]
+    watcher = SessionWatcher(sessions_dir)
+
+    if session_id:
+        session_dir = sessions_dir / session_id
+        if not session_dir.exists():
+            console.print(f"[bold red]Session directory not found: {session_id}[/bold red]")
+            return
+    else:
+        # Find active session, or most recent
+        session = watcher.find_active_session() or watcher.find_latest_session()
+        if not session:
+            console.print("[bold red]No sessions found.[/bold red]")
+            return
+        session_dir = watcher.get_session_dir(session)
+        is_active = session.end_time is None
+        status = "[green]ACTIVE[/green]" if is_active else "[dim]ended[/dim]"
+        console.print(f"[dim]Following session: {session.title or session.directory_name} ({status})[/dim]")
+
+    LiveSessionView(session_dir).run()
 
 
 @cli.command()

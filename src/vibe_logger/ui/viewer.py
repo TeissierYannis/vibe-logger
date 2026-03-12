@@ -3,7 +3,6 @@ from __future__ import annotations
 import sys
 import select
 from pathlib import Path
-from typing import Callable
 
 from rich.console import Console, Group
 from rich.layout import Layout
@@ -13,7 +12,7 @@ from rich.text import Text
 from rich.table import Table
 
 from ..models import Session, Message
-from ..loader import load_session_messages
+from ..loader import load_session_messages, load_sessions
 from .components import cost_format, token_format, duration_format
 
 
@@ -44,7 +43,6 @@ class SessionViewer:
                             else:
                                 break
                         elif key == "\x1b":  # Escape sequence
-                            # Read the rest of escape sequence
                             if _key_available():
                                 seq = sys.stdin.read(1)
                                 if seq == "[":
@@ -54,7 +52,6 @@ class SessionViewer:
                                     elif arrow == "B":  # Down
                                         self._move(1)
                             else:
-                                # Plain escape = back
                                 if self.viewing_session:
                                     self.viewing_session = None
                                     self.scroll_offset = 0
@@ -62,9 +59,13 @@ class SessionViewer:
                             self._move(1)
                         elif key in ("k", "K"):
                             self._move(-1)
+                        elif key == "r":
+                            self._refresh_sessions()
                         elif key == "\r" or key == "\n":
                             if not self.viewing_session:
                                 self._open_session()
+                        elif key == "L" and not self.viewing_session:
+                            self._open_live()
                         live.update(self._render())
         except (KeyboardInterrupt, EOFError):
             pass
@@ -77,13 +78,38 @@ class SessionViewer:
         else:
             self.selected = max(0, min(len(self.sessions) - 1, self.selected + delta))
 
+    def _refresh_sessions(self) -> None:
+        """Reload session list from disk."""
+        self.sessions = sorted(
+            load_sessions(self.sessions_dir),
+            key=lambda s: s.start_time,
+            reverse=True,
+        )
+        self.selected = min(self.selected, max(0, len(self.sessions) - 1))
+
     def _open_session(self) -> None:
         session = self.sessions[self.selected]
+        # If session is active (no end_time), open in live mode
+        if session.end_time is None:
+            self._open_live()
+            return
         if not session.messages:
             session_dir = self.sessions_dir / session.directory_name
             session.messages = load_session_messages(session_dir)
         self.viewing_session = session
         self.scroll_offset = 0
+
+    def _open_live(self) -> None:
+        """Open the selected session in live mode."""
+        session = self.sessions[self.selected]
+        session_dir = self.sessions_dir / session.directory_name
+        from .live_session import LiveSessionView
+        _restore_terminal()
+        LiveSessionView(session_dir).run()
+        _enable_raw_mode()
+
+    def _is_active(self, session: Session) -> bool:
+        return session.end_time is None
 
     def _render(self) -> Layout:
         layout = Layout()
@@ -104,13 +130,14 @@ class SessionViewer:
         else:
             layout["header"].update(Panel("[bold]Session Browser[/bold]", style="bold"))
             layout["body"].update(self._render_session_list())
-            layout["footer"].update(Text(" j/k/↑/↓: navigate | Enter: open | q: quit", style="dim"))
+            layout["footer"].update(Text(" j/k/arrows: navigate | Enter: open | L: live mode | r: refresh | q: quit", style="dim"))
 
         return layout
 
     def _render_session_list(self) -> Table:
         table = Table(border_style="dim", expand=True)
         table.add_column("", width=3)
+        table.add_column("", width=4)
         table.add_column("Date", style="cyan", width=16)
         table.add_column("Title", style="white")
         table.add_column("Duration", style="green", justify="right", width=8)
@@ -123,10 +150,12 @@ class SessionViewer:
 
         for i in range(visible_start, visible_end):
             s = self.sessions[i]
-            marker = "►" if i == self.selected else " "
+            marker = ">" if i == self.selected else " "
+            active = "[red]LIVE[/red]" if self._is_active(s) else ""
             style = "bold" if i == self.selected else ""
             table.add_row(
                 marker,
+                active,
                 s.start_time.strftime("%Y-%m-%d %H:%M"),
                 s.title or "(no title)",
                 duration_format(s.duration_seconds),
@@ -179,7 +208,6 @@ class SessionViewer:
                     expand=True,
                 ))
 
-        # Apply scroll offset
         visible = panels[self.scroll_offset:self.scroll_offset + 20]
         if not visible:
             visible = panels[-20:]

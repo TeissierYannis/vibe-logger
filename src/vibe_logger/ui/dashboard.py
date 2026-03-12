@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import sys
 import select
-import os
-from typing import Callable
+from datetime import datetime
 
 from rich.console import Console, Group
 from rich.layout import Layout
@@ -12,6 +11,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from ..models import Session
+from ..watcher import SessionWatcher
 from ..analytics import aggregate, group_by_project, group_by_branch, timeline, group_by_user
 from ..gamification import compute_player_stats, compute_leaderboard, _BADGE_DEFS
 from .components import (
@@ -22,12 +22,25 @@ from .components import (
 
 VIEWS = ["Overview", "Projects", "Branches", "Timeline", "Gamification"]
 
+# Refresh interval: number of ticks (each tick ~0.1s) between auto-refreshes
+REFRESH_TICKS = 50  # ~5 seconds
+
 
 class Dashboard:
-    def __init__(self, sessions: list[Session]):
-        self.sessions = sorted(sessions, key=lambda s: s.start_time)
+    def __init__(self, sessions: list[Session] | None = None, watcher: SessionWatcher | None = None):
+        self.watcher = watcher
+        if watcher:
+            self.sessions = watcher.sessions
+        else:
+            self.sessions = sorted(sessions or [], key=lambda s: s.start_time)
         self.current_view = 0
         self.console = Console()
+        self._tick_count = 0
+        self._last_refresh = datetime.now()
+
+    @property
+    def is_watching(self) -> bool:
+        return self.watcher is not None
 
     def run(self) -> None:
         if not self.sessions:
@@ -39,8 +52,6 @@ class Dashboard:
                 border_style="red",
             ))
             return
-
-        self.console.print(f"[dim]Loaded {len(self.sessions)} sessions. Press 1-5 to switch views, q to quit.[/dim]\n")
 
         try:
             _enable_raw_mode()
@@ -56,11 +67,25 @@ class Dashboard:
                             self.current_view = (self.current_view - 1) % len(VIEWS)
                         elif key in "12345":
                             self.current_view = int(key) - 1
-                        live.update(self._render())
+                        elif key == "r":  # manual refresh
+                            self._do_refresh()
+
+                    # Auto-refresh periodically when watching
+                    self._tick_count += 1
+                    if self.is_watching and self._tick_count >= REFRESH_TICKS:
+                        self._do_refresh()
+
+                    live.update(self._render())
         except (KeyboardInterrupt, EOFError):
             pass
         finally:
             _restore_terminal()
+
+    def _do_refresh(self) -> None:
+        self._tick_count = 0
+        self._last_refresh = datetime.now()
+        if self.watcher:
+            self.sessions = self.watcher.refresh()
 
     def _render(self) -> Layout:
         layout = Layout()
@@ -70,8 +95,10 @@ class Dashboard:
             Layout(name="footer", size=1),
         )
 
-        # Header: tab bar
+        # Header: tab bar with optional LIVE indicator
         tabs = []
+        if self.is_watching:
+            tabs.append("[bold green] LIVE [/bold green]")
         for i, name in enumerate(VIEWS):
             if i == self.current_view:
                 tabs.append(f"[bold white on blue] {i+1}:{name} [/bold white on blue]")
@@ -89,10 +116,12 @@ class Dashboard:
         ]
         layout["body"].update(renderers[self.current_view]())
 
-        # Footer
-        layout["footer"].update(
-            Text(" 1-5: switch view | Tab/l: next | h: prev | q: quit", style="dim")
-        )
+        # Footer with refresh info
+        footer_parts = [" 1-5: switch view | Tab/l: next | h: prev | r: refresh | q: quit"]
+        if self.is_watching:
+            footer_parts.append(f" | Last refresh: {self._last_refresh.strftime('%H:%M:%S')}")
+            footer_parts.append(f" | {len(self.sessions)} sessions")
+        layout["footer"].update(Text("".join(footer_parts), style="dim"))
 
         return layout
 
@@ -128,7 +157,6 @@ class Dashboard:
         else:
             leaderboard = compute_leaderboard(users)
             items.append(leaderboard_table(leaderboard))
-            # Show top player's badges
             if leaderboard:
                 items.append(badge_panel(leaderboard[0].badges, all_badge_count))
 

@@ -11,6 +11,7 @@ dependencies = ["click>=8.0", "rich>=13.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+web = ["fastapi>=0.110.0", "uvicorn[standard]>=0.27.0"]
 
 [project.scripts]
 vibe-logger = "vibe_logger.cli:cli"

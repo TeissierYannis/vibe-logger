@@ -78,6 +78,33 @@ def live(ctx: click.Context, session_id: str | None) -> None:
 
 
 @cli.command()
+@click.option("--port", default=8765, help="Port to serve on")
+@click.option("--no-open", is_flag=True, default=False, help="Don't auto-open browser")
+@click.option("--dev", is_flag=True, default=False, help="Dev mode (proxy to Vite dev server)")
+@click.pass_context
+def web(ctx: click.Context, port: int, no_open: bool, dev: bool) -> None:
+    """Launch the web dashboard with 3D visualizations."""
+    try:
+        import uvicorn
+    except ImportError:
+        click.echo("Web dependencies not installed. Run: pip install vibe-logger[web]", err=True)
+        raise SystemExit(1)
+
+    from .web.app import create_app
+    app = create_app(ctx.obj["sessions_dir"])
+
+    console = Console()
+    console.print(f"[bold green]vibe-logger web dashboard[/bold green] starting on http://localhost:{port}")
+
+    if not no_open:
+        import webbrowser
+        import threading
+        threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+
+
+@cli.command()
 @click.pass_context
 def stats(ctx: click.Context) -> None:
     """Print summary stats (non-interactive)."""

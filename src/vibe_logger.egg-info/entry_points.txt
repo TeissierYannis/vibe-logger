@@ -1,2 +1,0 @@
-[console_scripts]
-vibe-logger = vibe_logger.cli:cli

@@ -131,7 +131,12 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             if (!toolName) continue
 
             if (toolName === 'Agent') {
-              // Queue the tool call ID for association with agent_name later
+              // Spawn the subagent immediately for visual feedback
+              dispatch({ type: 'SPAWN_AGENT', id: tc.id, sessionId })
+              const stack = agentStack.current.get(sessionId) || []
+              stack.push(tc.id)
+              agentStack.current.set(sessionId, stack)
+              // Queue for matching with agent_name when agent messages arrive
               const pending = pendingAgentCalls.current.get(sessionId) || []
               pending.push(tc.id)
               pendingAgentCalls.current.set(sessionId, pending)
@@ -156,6 +161,13 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             despawnTimers.current.delete(agentId)
           }, 2000)
           despawnTimers.current.set(agentId, timer)
+          // Clean up agentNameToId mapping
+          for (const [key, id] of agentNameToId.current.entries()) {
+            if (id === agentId) {
+              agentNameToId.current.delete(key)
+              break
+            }
+          }
         }
       }
     }

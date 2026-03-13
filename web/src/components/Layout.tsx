@@ -7,6 +7,7 @@ const navItems = [
   { to: '/network', label: 'Network', icon: '🔗' },
   { to: '/gamification', label: 'Gamification', icon: '🏆' },
   { to: '/live', label: 'Live', icon: '⚡' },
+  { to: '/arena', label: 'Arena', icon: '🎮' },
 ]
 
 export default function Layout({ children }: { children: ReactNode }) {

@@ -1,4 +1,6 @@
-import { useWebSocket, useSessions } from '../api/client'
+import { useSessions } from '../api/client'
+import { useAgentTracker } from '../hooks/useAgentTracker'
+import CharacterArena from '../three/CharacterArena'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useEffect, useRef } from 'react'
 
@@ -36,7 +38,7 @@ function MessageBubble({ msg }: { msg: any }) {
 }
 
 export default function Live() {
-  const { messages, connected } = useWebSocket()
+  const { messages, connected, agents, removeAgent } = useAgentTracker()
   const { data: sessions } = useSessions()
   const bottomRef = useRef<HTMLDivElement>(null)
 
@@ -57,11 +59,19 @@ export default function Live() {
         }`}>
           {connected ? 'CONNECTED' : 'DISCONNECTED'}
         </span>
+        {agents.length > 0 && (
+          <span className="px-2 py-0.5 rounded-full text-xs bg-cyan-500/20 text-cyan-400">
+            {agents.length} agent{agents.length > 1 ? 's' : ''}
+          </span>
+        )}
       </div>
+
+      {/* Agent Arena */}
+      <CharacterArena agents={agents} height="350px" onRemoveAgent={removeAgent} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Live message feed */}
-        <div className="lg:col-span-2 glass rounded-xl flex flex-col" style={{ maxHeight: '70vh' }}>
+        <div className="lg:col-span-2 glass rounded-xl flex flex-col" style={{ maxHeight: '50vh' }}>
           <div className="p-4 border-b border-white/5 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-300">Live Messages</h3>
             <span className="text-xs text-gray-500">{liveMessages.length} messages</span>
@@ -69,7 +79,7 @@ export default function Live() {
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {liveMessages.length === 0 ? (
               <div className="text-center text-gray-600 py-12">
-                <p className="text-3xl mb-3">⏳</p>
+                <p className="text-3xl mb-3">&#x23F3;</p>
                 <p>Waiting for live messages...</p>
                 <p className="text-xs mt-1">Start a Vibe session to see messages appear here</p>
               </div>

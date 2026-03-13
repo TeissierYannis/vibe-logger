@@ -15,6 +15,7 @@ from rich.text import Text
 
 from ..models import Message, ToolCall
 from .components import cost_format, token_format, duration_format
+from .sprites import AgentSpriteTracker
 
 
 class LiveSessionView:
@@ -28,10 +29,13 @@ class LiveSessionView:
         self.messages: list[Message] = []
         self.meta: dict = {}
         self._file_pos: int = 0
+        self._agent_file_positions: dict[str, int] = {}  # agent_dir -> file pos
         self.follow_mode: bool = True
         self.scroll_offset: int = 0
         self._tick_count: int = 0
         self._is_active: bool = True
+        self.sprite_tracker = AgentSpriteTracker()
+        self._raw_messages: list[dict] = []  # raw dicts for sprite tracking
 
     def run(self) -> None:
         self._load_meta()
@@ -122,27 +126,69 @@ class LiveSessionView:
                 name=data.get("name"),
                 tool_call_id=data.get("tool_call_id"),
             ))
+            # Feed raw message to sprite tracker
+            self.sprite_tracker.process_message(data)
             had_new = True
+
+        # Also read agent sub-session messages
+        agents_dir = self.session_dir / "agents"
+        if agents_dir.is_dir():
+            for agent_entry in agents_dir.iterdir():
+                if not agent_entry.is_dir():
+                    continue
+                agent_msg_path = agent_entry / "messages.jsonl"
+                if not agent_msg_path.exists():
+                    continue
+                agent_key = str(agent_entry)
+                pos = self._agent_file_positions.get(agent_key, 0)
+                try:
+                    with open(agent_msg_path, "r", encoding="utf-8") as f:
+                        f.seek(pos)
+                        agent_lines = f.readlines()
+                        self._agent_file_positions[agent_key] = f.tell()
+                except OSError:
+                    continue
+                for aline in agent_lines:
+                    aline = aline.strip()
+                    if not aline:
+                        continue
+                    try:
+                        adata = json.loads(aline)
+                    except json.JSONDecodeError:
+                        continue
+                    self.sprite_tracker.process_message(adata)
 
         if had_new and self.follow_mode:
             self.scroll_offset = max(0, len(self.messages) - 10)
 
     def _render(self) -> Layout:
+        # Tick sprite animations
+        self.sprite_tracker.tick()
+
         layout = Layout()
-        layout.split_column(
-            Layout(name="header", size=3),
-            Layout(name="body"),
-            Layout(name="footer", size=1),
-        )
+
+        has_agents = len(self.sprite_tracker.agents) > 0
+        parts = [Layout(name="header", size=3)]
+        if has_agents:
+            parts.append(Layout(name="agents", size=10))
+        parts.append(Layout(name="body"))
+        parts.append(Layout(name="footer", size=1))
+        layout.split_column(*parts)
 
         # Header with live indicator
         title = self.meta.get("title", self.session_dir.name)
         live_indicator = "[bold red blink] LIVE [/bold red blink]" if self._is_active else "[dim] ENDED [/dim]"
         follow_indicator = " [green]FOLLOW[/green]" if self.follow_mode else ""
+        agent_count = len(self.sprite_tracker.agents)
+        agent_indicator = f" [cyan]({agent_count} agent{'s' if agent_count != 1 else ''})[/cyan]" if agent_count else ""
         layout["header"].update(Panel(
-            f"{live_indicator} [bold]{title}[/bold]{follow_indicator}",
+            f"{live_indicator} [bold]{title}[/bold]{follow_indicator}{agent_indicator}",
             style="bold",
         ))
+
+        # Agent sprites panel (if any agents present)
+        if has_agents:
+            layout["agents"].update(self.sprite_tracker.render())
 
         # Body: messages + stats sidebar
         body = Layout()

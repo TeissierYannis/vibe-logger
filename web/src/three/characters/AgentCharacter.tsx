@@ -7,10 +7,11 @@ import SpawnEffect from './SpawnEffect'
 
 interface Props {
   agent: AgentData
+  onSpawnComplete: (id: string) => void
   onDespawnComplete: (id: string) => void
 }
 
-export default function AgentCharacter({ agent, onDespawnComplete }: Props) {
+export default function AgentCharacter({ agent, onSpawnComplete, onDespawnComplete }: Props) {
   const groupRef = useRef<THREE.Group>(null)
   const headRef = useRef<THREE.Mesh>(null)
   const leftArmRef = useRef<THREE.Mesh>(null)
@@ -19,6 +20,7 @@ export default function AgentCharacter({ agent, onDespawnComplete }: Props) {
 
   // Animation state refs
   const spawnProgress = useRef(0)
+  const spawnCompleted = useRef(false)
   const despawnProgress = useRef(0)
   const prevState = useRef<AgentState>(agent.state)
   const transitionRef = useRef(1)
@@ -52,6 +54,10 @@ export default function AgentCharacter({ agent, onDespawnComplete }: Props) {
         ? p / 0.8 * 1.1
         : 1.1 - (p - 0.8) / 0.2 * 0.1
       groupRef.current.scale.setScalar(scale)
+      if (p >= 1 && !spawnCompleted.current) {
+        spawnCompleted.current = true
+        onSpawnComplete(agent.id)
+      }
       return
     }
 

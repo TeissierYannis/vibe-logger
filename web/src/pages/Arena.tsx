@@ -38,7 +38,7 @@ function MessageBubble({ msg }: { msg: any }) {
 }
 
 export default function Arena() {
-  const { agents, messages, connected, removeAgent } = useLiveContext()
+  const { agents, messages, connected, spawnComplete, removeAgent } = useLiveContext()
   const { data: sessions } = useSessions()
   const [panelOpen, setPanelOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -72,6 +72,7 @@ export default function Arena() {
       <CharacterArena
         agents={agents}
         height="100%"
+        onSpawnComplete={spawnComplete}
         onRemoveAgent={removeAgent}
       />
 

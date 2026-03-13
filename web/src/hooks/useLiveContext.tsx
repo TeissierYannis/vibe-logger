@@ -5,6 +5,7 @@ interface LiveContextValue {
   agents: AgentCharacter[]
   messages: any[]
   connected: boolean
+  spawnComplete: (id: string) => void
   removeAgent: (id: string) => void
 }
 
@@ -12,6 +13,7 @@ const LiveContext = createContext<LiveContextValue>({
   agents: [],
   messages: [],
   connected: false,
+  spawnComplete: () => {},
   removeAgent: () => {},
 })
 
@@ -143,12 +145,16 @@ export function LiveProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const spawnComplete = useCallback((id: string) => {
+    dispatch({ type: 'SET_IDLE', id })
+  }, [])
+
   const removeAgent = useCallback((id: string) => {
     dispatch({ type: 'REMOVE_AGENT', id })
   }, [])
 
   return (
-    <LiveContext.Provider value={{ agents, messages, connected, removeAgent }}>
+    <LiveContext.Provider value={{ agents, messages, connected, spawnComplete, removeAgent }}>
       {children}
     </LiveContext.Provider>
   )

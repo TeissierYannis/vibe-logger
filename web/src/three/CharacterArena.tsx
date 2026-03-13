@@ -21,6 +21,7 @@ function ArenaFloor() {
 // --- Arena Particles ---
 function ArenaParticles() {
   const ref = useRef<THREE.Points>(null)
+  const elapsed = useRef(0)
   const count = 200
 
   const positions = useMemo(() => {
@@ -41,9 +42,10 @@ function ArenaParticles() {
     return g
   }, [positions])
 
-  useFrame((state) => {
+  useFrame((_, delta) => {
     if (ref.current) {
-      ref.current.rotation.y = state.clock.elapsedTime * 0.03
+      elapsed.current += delta
+      ref.current.rotation.y = elapsed.current * 0.03
     }
   })
 
@@ -68,7 +70,14 @@ export default function CharacterArena({ agents, height = '400px', onRemoveAgent
 
   return (
     <div className="w-full rounded-xl overflow-hidden glass" style={{ height }}>
-      <Canvas camera={{ position: [0, 4, 8], fov: 50 }}>
+      <Canvas
+        camera={{ position: [0, 4, 8], fov: 50 }}
+        gl={{ powerPreference: 'high-performance', antialias: true }}
+        onCreated={({ gl }) => {
+          const canvas = gl.domElement
+          canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault() }, false)
+        }}
+      >
         <ambientLight intensity={0.3} />
         <pointLight position={[5, 10, 5]} intensity={1} color="#00d4ff" />
         <pointLight position={[-5, 5, -5]} intensity={0.5} color="#a855f7" />

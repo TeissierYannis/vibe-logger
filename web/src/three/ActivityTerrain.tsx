@@ -94,7 +94,14 @@ function FloatingParticles() {
 export default function ActivityTerrain({ data }: { data: TimelineEntry[] }) {
   return (
     <div className="w-full h-[400px] rounded-xl overflow-hidden glass">
-      <Canvas camera={{ position: [8, 6, 8], fov: 50 }}>
+      <Canvas
+        camera={{ position: [8, 6, 8], fov: 50 }}
+        gl={{ powerPreference: 'high-performance', antialias: true }}
+        onCreated={({ gl }) => {
+          const canvas = gl.domElement
+          canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault() }, false)
+        }}
+      >
         <ambientLight intensity={0.3} />
         <pointLight position={[10, 10, 10]} intensity={1} color="#00d4ff" />
         <pointLight position={[-10, 5, -10]} intensity={0.5} color="#a855f7" />

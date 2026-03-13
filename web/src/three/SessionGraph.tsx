@@ -129,7 +129,14 @@ export default function SessionGraph({ projects, branches }: Props) {
 
   return (
     <div className="w-full h-[500px] rounded-xl overflow-hidden glass">
-      <Canvas camera={{ position: [0, 5, 8], fov: 50 }}>
+      <Canvas
+        camera={{ position: [0, 5, 8], fov: 50 }}
+        gl={{ powerPreference: 'high-performance', antialias: true }}
+        onCreated={({ gl }) => {
+          const canvas = gl.domElement
+          canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault() }, false)
+        }}
+      >
         <ambientLight intensity={0.2} />
         <pointLight position={[5, 10, 5]} intensity={1} color="#00d4ff" />
         <pointLight position={[-5, 5, -5]} intensity={0.5} color="#ec4899" />

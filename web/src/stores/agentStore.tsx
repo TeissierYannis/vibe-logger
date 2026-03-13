@@ -30,6 +30,14 @@ const TOOL_STATE_MAP: Record<string, AgentState> = {
   Agent: 'executing',
   WebSearch: 'browsing',
   WebFetch: 'browsing',
+  // Mistral Vibe tool names
+  read_file: 'reading',
+  write_file: 'writing',
+  bash: 'executing',
+  grep: 'searching',
+  web_search: 'browsing',
+  web_fetch: 'browsing',
+  task: 'executing',
 }
 
 // --- Actions ---

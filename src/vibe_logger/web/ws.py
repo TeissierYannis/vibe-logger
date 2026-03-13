@@ -63,6 +63,10 @@ async def websocket_live(ws: WebSocket):
     # Track live session message positions
     live_positions: dict[str, int] = {}
 
+    # Track known agent directories per session for spawn/complete events
+    known_agents: dict[str, set[str]] = {}  # session_id -> set of agent dir names
+    completed_agents: set[str] = set()  # "session_id:agent_dir" keys already notified
+
     try:
         while True:
             watcher.refresh()
@@ -87,14 +91,55 @@ async def websocket_live(ws: WebSocket):
                 # Stream main session messages
                 await _stream_messages(ws, session_dir / "messages.jsonl", s.session_id, live_positions)
 
-                # Stream agent sub-session messages
+                # Stream agent sub-session messages and detect new/completed agents
                 agents_dir = session_dir / "agents"
                 if agents_dir.is_dir():
+                    if s.session_id not in known_agents:
+                        known_agents[s.session_id] = set()
+
                     for agent_entry in sorted(agents_dir.iterdir()):
-                        if agent_entry.is_dir():
-                            agent_msg_path = agent_entry / "messages.jsonl"
-                            agent_key = f"{s.session_id}:{agent_entry.name}"
-                            await _stream_messages(ws, agent_msg_path, s.session_id, live_positions, key=agent_key, agent_name=agent_entry.name)
+                        if not agent_entry.is_dir():
+                            continue
+                        dir_name = agent_entry.name
+
+                        # Detect newly spawned agents
+                        if dir_name not in known_agents[s.session_id]:
+                            known_agents[s.session_id].add(dir_name)
+                            label = dir_name.split("_")[0]
+                            meta_path = agent_entry / "meta.json"
+                            if meta_path.exists():
+                                try:
+                                    agent_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                                    label = agent_meta.get("title", label)
+                                except (json.JSONDecodeError, OSError):
+                                    pass
+                            await ws.send_json({
+                                "type": "agent_spawned",
+                                "session_id": s.session_id,
+                                "agent_id": dir_name,
+                                "agent_name": label,
+                            })
+
+                        # Stream messages
+                        agent_msg_path = agent_entry / "messages.jsonl"
+                        agent_key = f"{s.session_id}:{dir_name}"
+                        await _stream_messages(ws, agent_msg_path, s.session_id, live_positions, key=agent_key, agent_name=dir_name)
+
+                        # Detect completed agents
+                        if agent_key not in completed_agents:
+                            meta_path = agent_entry / "meta.json"
+                            if meta_path.exists():
+                                try:
+                                    agent_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                                    if agent_meta.get("end_time"):
+                                        completed_agents.add(agent_key)
+                                        await ws.send_json({
+                                            "type": "agent_completed",
+                                            "session_id": s.session_id,
+                                            "agent_id": dir_name,
+                                        })
+                                except (json.JSONDecodeError, OSError):
+                                    pass
 
             # Send updated stats
             from ..analytics import aggregate
@@ -109,6 +154,6 @@ async def websocket_live(ws: WebSocket):
             prev_session_ids = current_ids
             prev_count = len(current_sessions)
 
-            await asyncio.sleep(3)
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass

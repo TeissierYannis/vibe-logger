@@ -60,10 +60,15 @@ function ArenaParticles() {
 interface Props {
   agents: AgentCharacter[]
   height?: string
+  onSpawnComplete?: (id: string) => void
   onRemoveAgent?: (id: string) => void
 }
 
-export default function CharacterArena({ agents, height = '400px', onRemoveAgent }: Props) {
+export default function CharacterArena({ agents, height = '400px', onSpawnComplete, onRemoveAgent }: Props) {
+  const handleSpawnComplete = (id: string) => {
+    onSpawnComplete?.(id)
+  }
+
   const handleDespawnComplete = (id: string) => {
     onRemoveAgent?.(id)
   }
@@ -82,6 +87,7 @@ export default function CharacterArena({ agents, height = '400px', onRemoveAgent
           <AgentCharacterComponent
             key={agent.id}
             agent={agent}
+            onSpawnComplete={handleSpawnComplete}
             onDespawnComplete={handleDespawnComplete}
           />
         ))}

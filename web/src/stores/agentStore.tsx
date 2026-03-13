@@ -36,6 +36,7 @@ const TOOL_STATE_MAP: Record<string, AgentState> = {
 type AgentAction =
   | { type: 'SPAWN_ROOT'; sessionId: string }
   | { type: 'SPAWN_AGENT'; id: string; sessionId: string }
+  | { type: 'SET_IDLE'; id: string }
   | { type: 'UPDATE_TOOL'; sessionId: string; toolName: string }
   | { type: 'COMPLETE_AGENT'; id: string }
   | { type: 'REMOVE_AGENT'; id: string }
@@ -97,6 +98,14 @@ export function agentReducer(state: AgentCharacter[], action: AgentAction): Agen
         },
       ]
       return recomputePositions(next)
+    }
+
+    case 'SET_IDLE': {
+      return state.map(a =>
+        a.id === action.id && a.state === 'spawning'
+          ? { ...a, state: 'idle' as AgentState }
+          : a
+      )
     }
 
     case 'UPDATE_TOOL': {

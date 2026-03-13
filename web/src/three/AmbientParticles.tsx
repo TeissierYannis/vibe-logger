@@ -4,6 +4,7 @@ import * as THREE from 'three'
 
 function Particles() {
   const ref = useRef<THREE.Points>(null)
+  const elapsed = useRef(0)
   const count = 500
 
   const positions = useMemo(() => {
@@ -16,10 +17,11 @@ function Particles() {
     return arr
   }, [])
 
-  useFrame((state) => {
+  useFrame((_state, delta) => {
+    elapsed.current += delta
     if (ref.current) {
-      ref.current.rotation.y = state.clock.elapsedTime * 0.01
-      ref.current.rotation.x = Math.sin(state.clock.elapsedTime * 0.005) * 0.1
+      ref.current.rotation.y = elapsed.current * 0.01
+      ref.current.rotation.x = Math.sin(elapsed.current * 0.005) * 0.1
     }
   })
 

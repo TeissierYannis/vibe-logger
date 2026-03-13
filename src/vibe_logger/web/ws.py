@@ -67,6 +67,52 @@ async def websocket_live(ws: WebSocket):
     known_agents: dict[str, set[str]] = {}  # session_id -> set of agent dir names
     completed_agents: set[str] = set()  # "session_id:agent_dir" keys already notified
 
+    # Send initial state for already-active sessions and their agents
+    watcher.refresh()
+    for s in watcher.sessions:
+        if s.end_time is not None:
+            continue
+        await ws.send_json({
+            "type": "new_session",
+            "session": _session_to_dict(s),
+        })
+        prev_session_ids.add(s.session_id)
+
+        session_dir = watcher.get_session_dir(s)
+        agents_dir = session_dir / "agents"
+        if agents_dir.is_dir():
+            if s.session_id not in known_agents:
+                known_agents[s.session_id] = set()
+            for agent_entry in sorted(agents_dir.iterdir()):
+                if not agent_entry.is_dir():
+                    continue
+                dir_name = agent_entry.name
+                known_agents[s.session_id].add(dir_name)
+                label = dir_name.split("_")[0]
+                meta_path = agent_entry / "meta.json"
+                agent_meta = {}
+                if meta_path.exists():
+                    try:
+                        agent_meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                        label = agent_meta.get("title", label)
+                    except (json.JSONDecodeError, OSError):
+                        pass
+                await ws.send_json({
+                    "type": "agent_spawned",
+                    "session_id": s.session_id,
+                    "agent_id": dir_name,
+                    "agent_name": label,
+                })
+                # Mark already-completed agents
+                if agent_meta.get("end_time"):
+                    agent_key = f"{s.session_id}:{dir_name}"
+                    completed_agents.add(agent_key)
+                    await ws.send_json({
+                        "type": "agent_completed",
+                        "session_id": s.session_id,
+                        "agent_id": dir_name,
+                    })
+
     try:
         while True:
             watcher.refresh()

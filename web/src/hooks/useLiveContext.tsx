@@ -17,6 +17,8 @@ const LiveContext = createContext<LiveContextValue>({
   removeAgent: () => {},
 })
 
+const AGENT_TOOL_NAMES = new Set(['Agent', 'task'])
+
 export function LiveProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<any[]>([])
   const [connected, setConnected] = useState(false)
@@ -30,36 +32,38 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   // Mapping from "sessionId:agentName" -> spawn ID used in reducer
   const agentNameToId = useRef<Map<string, string>>(new Map())
 
-  // Single persistent WebSocket connection
+  // Single persistent WebSocket connection with robust reconnection
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/live`)
-    wsRef.current = ws
+    const url = `${protocol}//${window.location.host}/api/ws/live`
+    let closed = false
 
-    ws.onopen = () => setConnected(true)
-    ws.onclose = () => {
-      setConnected(false)
-      // Reconnect after 3 seconds
-      setTimeout(() => {
-        if (wsRef.current === ws) {
-          const ws2 = new WebSocket(`${protocol}//${window.location.host}/api/ws/live`)
-          wsRef.current = ws2
-          ws2.onopen = () => setConnected(true)
-          ws2.onclose = () => setConnected(false)
-          ws2.onmessage = ws.onmessage
+    function connect() {
+      if (closed) return
+      const ws = new WebSocket(url)
+      wsRef.current = ws
+
+      ws.onopen = () => setConnected(true)
+      ws.onclose = () => {
+        setConnected(false)
+        if (!closed) {
+          setTimeout(connect, 3000)
         }
-      }, 3000)
+      }
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data)
+          setMessages(prev => [...prev.slice(-200), msg])
+        } catch {}
+      }
     }
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data)
-        setMessages(prev => [...prev.slice(-200), msg])
-      } catch {}
-    }
+
+    connect()
 
     return () => {
+      closed = true
+      wsRef.current?.close()
       wsRef.current = null
-      ws.close()
     }
   }, [])
 
@@ -73,6 +77,60 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         const sessionId = wsMsg.session?.session_id || wsMsg.session?.directory_name || 'unknown'
         dispatch({ type: 'SPAWN_ROOT', sessionId })
         agentStack.current.set(sessionId, [`root-${sessionId}`])
+      }
+
+      if (wsMsg.type === 'agent_spawned') {
+        const sessionId = wsMsg.session_id || 'unknown'
+        const agentDirName = wsMsg.agent_id
+
+        // Ensure root exists
+        if (!agentStack.current.has(sessionId)) {
+          dispatch({ type: 'SPAWN_ROOT', sessionId })
+          agentStack.current.set(sessionId, [`root-${sessionId}`])
+        }
+
+        const nameKey = `${sessionId}:${agentDirName}`
+        const stack = agentStack.current.get(sessionId) || []
+
+        // Only spawn if not already tracked
+        if (!agentNameToId.current.has(nameKey)) {
+          // Associate with pending tool call ID if available
+          const pending = pendingAgentCalls.current.get(sessionId) || []
+          let id = agentDirName
+          if (pending.length > 0) {
+            id = pending.shift()!
+            pendingAgentCalls.current.set(sessionId, pending)
+          }
+          agentNameToId.current.set(nameKey, id)
+
+          if (!stack.includes(id)) {
+            dispatch({ type: 'SPAWN_AGENT', id, sessionId })
+            stack.push(id)
+            agentStack.current.set(sessionId, stack)
+          }
+        }
+      }
+
+      if (wsMsg.type === 'agent_completed') {
+        const sessionId = wsMsg.session_id || 'unknown'
+        const agentDirName = wsMsg.agent_id
+        const nameKey = `${sessionId}:${agentDirName}`
+        const agentId = agentNameToId.current.get(nameKey) || agentDirName
+
+        dispatch({ type: 'COMPLETE_AGENT', id: agentId })
+        const stack = agentStack.current.get(sessionId) || []
+        const idx = stack.indexOf(agentId)
+        if (idx !== -1) stack.splice(idx, 1)
+        agentStack.current.set(sessionId, stack)
+
+        if (!despawnTimers.current.has(agentId)) {
+          const timer = setTimeout(() => {
+            dispatch({ type: 'REMOVE_AGENT', id: agentId })
+            despawnTimers.current.delete(agentId)
+          }, 2000)
+          despawnTimers.current.set(agentId, timer)
+        }
+        agentNameToId.current.delete(nameKey)
       }
 
       if (wsMsg.type === 'live_message' && wsMsg.message) {
@@ -130,7 +188,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             const toolName = tc.name || tc.function?.name
             if (!toolName) continue
 
-            if (toolName === 'Agent') {
+            if (AGENT_TOOL_NAMES.has(toolName)) {
               // Spawn the subagent immediately for visual feedback
               dispatch({ type: 'SPAWN_AGENT', id: tc.id, sessionId })
               const stack = agentStack.current.get(sessionId) || []
@@ -148,7 +206,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           }
         }
 
-        if (msg.role === 'tool' && msg.name === 'Agent' && msg.tool_call_id) {
+        if (msg.role === 'tool' && AGENT_TOOL_NAMES.has(msg.name) && msg.tool_call_id) {
           // Try to find the agent by tool_call_id directly
           const agentId = msg.tool_call_id
           dispatch({ type: 'COMPLETE_AGENT', id: agentId })

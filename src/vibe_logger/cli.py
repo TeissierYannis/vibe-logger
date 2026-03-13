@@ -77,10 +77,48 @@ def live(ctx: click.Context, session_id: str | None) -> None:
     LiveSessionView(session_dir).run()
 
 
+def _ensure_frontend_built(console: Console) -> None:
+    """Auto-install and build the frontend if dist/ doesn't exist."""
+    import subprocess
+    from pathlib import Path
+
+    web_dir = Path(__file__).parent.parent.parent / "web"
+    dist_dir = web_dir / "dist"
+
+    if dist_dir.exists() and any(dist_dir.iterdir()):
+        return
+
+    if not web_dir.exists():
+        console.print("[bold red]Frontend source not found.[/bold red]")
+        raise SystemExit(1)
+
+    try:
+        subprocess.run(["npm", "--version"], capture_output=True, check=True)
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        console.print("[bold red]npm not found.[/bold red] Install Node.js to use the web dashboard.")
+        raise SystemExit(1)
+
+    node_modules = web_dir / "node_modules"
+    if not node_modules.exists():
+        console.print("[bold cyan]Installing frontend dependencies...[/bold cyan]")
+        result = subprocess.run(["npm", "install"], cwd=str(web_dir), capture_output=True, text=True)
+        if result.returncode != 0:
+            console.print(f"[bold red]npm install failed:[/bold red]\n{result.stderr}")
+            raise SystemExit(1)
+        console.print("[green]Dependencies installed.[/green]")
+
+    console.print("[bold cyan]Building frontend...[/bold cyan]")
+    result = subprocess.run(["npm", "run", "build"], cwd=str(web_dir), capture_output=True, text=True)
+    if result.returncode != 0:
+        console.print(f"[bold red]Build failed:[/bold red]\n{result.stderr}")
+        raise SystemExit(1)
+    console.print("[green]Frontend built.[/green]")
+
+
 @cli.command()
 @click.option("--port", default=8765, help="Port to serve on")
 @click.option("--no-open", is_flag=True, default=False, help="Don't auto-open browser")
-@click.option("--dev", is_flag=True, default=False, help="Dev mode (proxy to Vite dev server)")
+@click.option("--dev", is_flag=True, default=False, help="Dev mode (skip build, use Vite dev server)")
 @click.pass_context
 def web(ctx: click.Context, port: int, no_open: bool, dev: bool) -> None:
     """Launch the web dashboard with 3D visualizations."""
@@ -90,13 +128,19 @@ def web(ctx: click.Context, port: int, no_open: bool, dev: bool) -> None:
         click.echo("Web dependencies not installed. Run: pip install vibe-logger[web]", err=True)
         raise SystemExit(1)
 
+    console = Console()
+
+    if dev:
+        console.print("[bold yellow]Dev mode:[/bold yellow] API only. Run [cyan]cd web && npm run dev[/cyan] in another terminal.")
+    else:
+        _ensure_frontend_built(console)
+
     from .web.app import create_app
     app = create_app(ctx.obj["sessions_dir"])
 
-    console = Console()
-    console.print(f"[bold green]vibe-logger web dashboard[/bold green] starting on http://localhost:{port}")
+    console.print(f"[bold green]vibe-logger[/bold green] running on [cyan]http://localhost:{port}[/cyan]")
 
-    if not no_open:
+    if not no_open and not dev:
         import webbrowser
         import threading
         threading.Timer(1.5, lambda: webbrowser.open(f"http://localhost:{port}")).start()

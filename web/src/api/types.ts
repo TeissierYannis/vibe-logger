@@ -16,6 +16,10 @@ export interface Session {
   tools_available: string[];
   is_active: boolean;
   messages?: Message[];
+  agent_count: number;
+  total_cost_with_agents: number;
+  total_tokens_with_agents: number;
+  agents?: Session[];
 }
 
 export interface Message {

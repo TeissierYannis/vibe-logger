@@ -16,8 +16,8 @@ router = APIRouter(prefix="/api")
 watcher: SessionWatcher | None = None
 
 
-def _session_to_dict(s) -> dict:
-    return {
+def _session_to_dict(s, include_agents: bool = True) -> dict:
+    d = {
         "session_id": s.session_id,
         "directory_name": s.directory_name,
         "start_time": s.start_time.isoformat(),
@@ -34,7 +34,13 @@ def _session_to_dict(s) -> dict:
         "total_tokens": s.total_tokens,
         "tools_available": s.tools_available,
         "is_active": s.end_time is None,
+        "agent_count": s.agent_count,
+        "total_cost_with_agents": s.total_cost_with_agents,
+        "total_tokens_with_agents": s.total_tokens_with_agents,
     }
+    if include_agents and s.agents:
+        d["agents"] = [_session_to_dict(a, include_agents=False) for a in s.agents]
+    return d
 
 
 def _message_to_dict(m) -> dict:

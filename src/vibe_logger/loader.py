@@ -61,6 +61,20 @@ def _parse_session(session_dir: Path, load_messages: bool) -> Session | None:
         if messages_path.exists():
             messages = _parse_messages(messages_path)
 
+    # Parse agent sub-sessions
+    agents: list[Session] = []
+    agents_dir = session_dir / "agents"
+    if agents_dir.is_dir():
+        for agent_entry in sorted(agents_dir.iterdir()):
+            if not agent_entry.is_dir():
+                continue
+            agent_meta = agent_entry / "meta.json"
+            if not agent_meta.exists():
+                continue
+            agent_session = _parse_session(agent_entry, load_messages)
+            if agent_session:
+                agents.append(agent_session)
+
     return Session(
         session_id=meta.get("session_id", session_dir.name),
         directory_name=session_dir.name,
@@ -74,6 +88,7 @@ def _parse_session(session_dir: Path, load_messages: bool) -> Session | None:
         stats=meta.get("stats", {}),
         messages=messages,
         tools_available=tools,
+        agents=agents,
     )
 
 

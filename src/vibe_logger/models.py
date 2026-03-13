@@ -35,6 +35,7 @@ class Session:
     stats: dict
     messages: list[Message] = field(default_factory=list)
     tools_available: list[str] = field(default_factory=list)
+    agents: list[Session] = field(default_factory=list)
 
     @property
     def duration_seconds(self) -> float:
@@ -85,3 +86,15 @@ class Session:
     @property
     def project_name(self) -> str:
         return self.working_directory.rstrip("/").split("/")[-1] if self.working_directory else "unknown"
+
+    @property
+    def agent_count(self) -> int:
+        return len(self.agents)
+
+    @property
+    def total_cost_with_agents(self) -> float:
+        return self.cost + sum(a.cost for a in self.agents)
+
+    @property
+    def total_tokens_with_agents(self) -> int:
+        return self.total_tokens + sum(a.total_tokens for a in self.agents)

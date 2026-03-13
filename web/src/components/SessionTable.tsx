@@ -44,6 +44,7 @@ export default function SessionTable({ sessions, limit = 15 }: { sessions: Sessi
               <th className="text-right px-5 py-3">Duration</th>
               <th className="text-right px-5 py-3">Tokens</th>
               <th className="text-right px-5 py-3">Cost</th>
+              <th className="text-right px-5 py-3">Agents</th>
               <th className="text-left px-5 py-3">Branch</th>
               <th className="text-center px-5 py-3">Status</th>
             </tr>
@@ -65,7 +66,14 @@ export default function SessionTable({ sessions, limit = 15 }: { sessions: Sessi
                 </td>
                 <td className="px-5 py-3 text-right text-green-400/70 font-mono text-xs">{formatDuration(s.duration_seconds)}</td>
                 <td className="px-5 py-3 text-right text-yellow-400/70 font-mono text-xs">{formatTokens(s.total_tokens)}</td>
-                <td className="px-5 py-3 text-right text-red-400/70 font-mono text-xs">{formatCost(s.cost)}</td>
+                <td className="px-5 py-3 text-right text-red-400/70 font-mono text-xs">{formatCost(s.total_cost_with_agents ?? s.cost)}</td>
+                <td className="px-5 py-3 text-right font-mono text-xs">
+                  {(s.agent_count ?? 0) > 0 ? (
+                    <span className="text-cyan-400">{s.agent_count}</span>
+                  ) : (
+                    <span className="text-gray-700">-</span>
+                  )}
+                </td>
                 <td className="px-5 py-3 text-purple-400/70 max-w-[100px] truncate text-xs">{s.git_branch || '-'}</td>
                 <td className="px-5 py-3 text-center">
                   {s.is_active ? (

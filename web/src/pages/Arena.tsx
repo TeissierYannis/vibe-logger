@@ -1,4 +1,4 @@
-import { useAgentTracker } from '../hooks/useAgentTracker'
+import { useLiveContext } from '../hooks/useLiveContext'
 import { useSessions } from '../api/client'
 import CharacterArena from '../three/CharacterArena'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -38,7 +38,7 @@ function MessageBubble({ msg }: { msg: any }) {
 }
 
 export default function Arena() {
-  const { agents, messages, connected, removeAgent } = useAgentTracker()
+  const { agents, messages, connected, removeAgent } = useLiveContext()
   const { data: sessions } = useSessions()
   const [panelOpen, setPanelOpen] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)

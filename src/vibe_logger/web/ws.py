@@ -90,7 +90,7 @@ async def websocket_live(ws: WebSocket):
                 # Stream agent sub-session messages
                 agents_dir = session_dir / "agents"
                 if agents_dir.is_dir():
-                    for agent_entry in agents_dir.iterdir():
+                    for agent_entry in sorted(agents_dir.iterdir()):
                         if agent_entry.is_dir():
                             agent_msg_path = agent_entry / "messages.jsonl"
                             agent_key = f"{s.session_id}:{agent_entry.name}"

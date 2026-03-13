@@ -25,6 +25,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   const agentStack = useRef<Map<string, string[]>>(new Map())
   const despawnTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const wsRef = useRef<WebSocket | null>(null)
+  // Queue of pending Agent tool call IDs per session (parent called Agent but agent_name not yet seen)
+  const pendingAgentCalls = useRef<Map<string, string[]>>(new Map())
+  // Mapping from "sessionId:agentName" -> spawn ID used in reducer
+  const agentNameToId = useRef<Map<string, string>>(new Map())
 
   // Single persistent WebSocket connection
   useEffect(() => {
@@ -84,12 +88,26 @@ export function LiveProvider({ children }: { children: ReactNode }) {
 
         // If this message is from a sub-agent, spawn it if not already known
         if (agentName) {
-          const agentId = `agent-${agentName}`
-          const stack = agentStack.current.get(sessionId) || []
-          if (!stack.includes(agentId)) {
-            dispatch({ type: 'SPAWN_AGENT', id: agentId, sessionId })
-            stack.push(agentId)
-            agentStack.current.set(sessionId, stack)
+          const nameKey = `${sessionId}:${agentName}`
+          let agentId = agentNameToId.current.get(nameKey)
+
+          if (!agentId) {
+            // Check if there's a pending Agent tool call ID to associate
+            const pending = pendingAgentCalls.current.get(sessionId) || []
+            if (pending.length > 0) {
+              agentId = pending.shift()!
+              pendingAgentCalls.current.set(sessionId, pending)
+            } else {
+              agentId = `agent-${agentName}`
+            }
+            agentNameToId.current.set(nameKey, agentId)
+
+            const stack = agentStack.current.get(sessionId) || []
+            if (!stack.includes(agentId)) {
+              dispatch({ type: 'SPAWN_AGENT', id: agentId, sessionId })
+              stack.push(agentId)
+              agentStack.current.set(sessionId, stack)
+            }
           }
 
           // Update this specific agent's tool state
@@ -97,8 +115,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
             for (const tc of msg.tool_calls) {
               const toolName = tc.name || tc.function?.name
               if (toolName) {
-                // Directly update this agent by temporarily making it top of stack
-                dispatch({ type: 'UPDATE_TOOL', sessionId, toolName })
+                dispatch({ type: 'UPDATE_TOOL', sessionId, toolName, agentId })
               }
             }
           }
@@ -106,33 +123,51 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         }
 
         // Parent session messages
+        const rootId = `root-${sessionId}`
+
         if (msg.role === 'assistant' && msg.tool_calls) {
           for (const tc of msg.tool_calls) {
             const toolName = tc.name || tc.function?.name
             if (!toolName) continue
 
             if (toolName === 'Agent') {
+              // Spawn the subagent immediately for visual feedback
               dispatch({ type: 'SPAWN_AGENT', id: tc.id, sessionId })
               const stack = agentStack.current.get(sessionId) || []
               stack.push(tc.id)
               agentStack.current.set(sessionId, stack)
+              // Queue for matching with agent_name when agent messages arrive
+              const pending = pendingAgentCalls.current.get(sessionId) || []
+              pending.push(tc.id)
+              pendingAgentCalls.current.set(sessionId, pending)
+              // Update root to show it's spawning an agent
+              dispatch({ type: 'UPDATE_TOOL', sessionId, toolName, agentId: rootId })
             } else {
-              dispatch({ type: 'UPDATE_TOOL', sessionId, toolName })
+              dispatch({ type: 'UPDATE_TOOL', sessionId, toolName, agentId: rootId })
             }
           }
         }
 
         if (msg.role === 'tool' && msg.name === 'Agent' && msg.tool_call_id) {
-          dispatch({ type: 'COMPLETE_AGENT', id: msg.tool_call_id })
+          // Try to find the agent by tool_call_id directly
+          const agentId = msg.tool_call_id
+          dispatch({ type: 'COMPLETE_AGENT', id: agentId })
           const stack = agentStack.current.get(sessionId) || []
-          const idx = stack.indexOf(msg.tool_call_id)
+          const idx = stack.indexOf(agentId)
           if (idx !== -1) stack.splice(idx, 1)
           agentStack.current.set(sessionId, stack)
           const timer = setTimeout(() => {
-            dispatch({ type: 'REMOVE_AGENT', id: msg.tool_call_id! })
-            despawnTimers.current.delete(msg.tool_call_id!)
+            dispatch({ type: 'REMOVE_AGENT', id: agentId })
+            despawnTimers.current.delete(agentId)
           }, 2000)
-          despawnTimers.current.set(msg.tool_call_id, timer)
+          despawnTimers.current.set(agentId, timer)
+          // Clean up agentNameToId mapping
+          for (const [key, id] of agentNameToId.current.entries()) {
+            if (id === agentId) {
+              agentNameToId.current.delete(key)
+              break
+            }
+          }
         }
       }
     }

@@ -27,6 +27,7 @@ const TOOL_STATE_MAP: Record<string, AgentState> = {
   Edit: 'writing',
   NotebookEdit: 'writing',
   Bash: 'executing',
+  Agent: 'executing',
   WebSearch: 'browsing',
   WebFetch: 'browsing',
 }
@@ -37,7 +38,7 @@ type AgentAction =
   | { type: 'SPAWN_ROOT'; sessionId: string }
   | { type: 'SPAWN_AGENT'; id: string; sessionId: string }
   | { type: 'SET_IDLE'; id: string }
-  | { type: 'UPDATE_TOOL'; sessionId: string; toolName: string }
+  | { type: 'UPDATE_TOOL'; sessionId: string; toolName: string; agentId?: string }
   | { type: 'COMPLETE_AGENT'; id: string }
   | { type: 'REMOVE_AGENT'; id: string }
   | { type: 'REMOVE_SESSION'; sessionId: string }
@@ -109,8 +110,14 @@ export function agentReducer(state: AgentCharacter[], action: AgentAction): Agen
     }
 
     case 'UPDATE_TOOL': {
-      const sessionAgents = state.filter(a => a.sessionId === action.sessionId && a.state !== 'despawning')
-      const target = sessionAgents[sessionAgents.length - 1]
+      let target: AgentCharacter | undefined
+      if (action.agentId) {
+        target = state.find(a => a.id === action.agentId && a.state !== 'despawning')
+      }
+      if (!target) {
+        const sessionAgents = state.filter(a => a.sessionId === action.sessionId && a.state !== 'despawning')
+        target = sessionAgents[sessionAgents.length - 1]
+      }
       if (!target) return state
       const newState = TOOL_STATE_MAP[action.toolName] || 'idle'
       return state.map(a =>

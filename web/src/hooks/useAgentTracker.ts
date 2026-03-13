@@ -15,6 +15,32 @@ export function useAgentTracker() {
     processedCount.current = messages.length
 
     for (const wsMsg of newMessages) {
+      if (wsMsg.type === 'agent_spawned') {
+        const sessionId = wsMsg.session_id || 'unknown'
+        if (!agentStack.current.has(sessionId)) {
+          dispatch({ type: 'SPAWN_ROOT', sessionId })
+          agentStack.current.set(sessionId, [`root-${sessionId}`])
+        }
+        dispatch({ type: 'SPAWN_AGENT', id: wsMsg.agent_id, sessionId })
+        const stack = agentStack.current.get(sessionId) || []
+        stack.push(wsMsg.agent_id)
+        agentStack.current.set(sessionId, stack)
+      }
+
+      if (wsMsg.type === 'agent_completed') {
+        dispatch({ type: 'COMPLETE_AGENT', id: wsMsg.agent_id })
+        const sessionId = wsMsg.session_id || 'unknown'
+        const stack = agentStack.current.get(sessionId) || []
+        const idx = stack.indexOf(wsMsg.agent_id)
+        if (idx !== -1) stack.splice(idx, 1)
+        agentStack.current.set(sessionId, stack)
+        const timer = setTimeout(() => {
+          dispatch({ type: 'REMOVE_AGENT', id: wsMsg.agent_id })
+          despawnTimers.current.delete(wsMsg.agent_id)
+        }, 3000)
+        despawnTimers.current.set(wsMsg.agent_id, timer)
+      }
+
       if (wsMsg.type === 'new_session') {
         const sessionId = wsMsg.session?.session_id || wsMsg.session?.directory_name || 'unknown'
         dispatch({ type: 'SPAWN_ROOT', sessionId })
@@ -42,7 +68,7 @@ export function useAgentTracker() {
             const toolName = tc.name || tc.function?.name
             if (!toolName) continue
 
-            if (toolName === 'Agent') {
+            if (toolName === 'Agent' || toolName === 'task') {
               // Spawn a new sub-agent character
               dispatch({ type: 'SPAWN_AGENT', id: tc.id, sessionId })
               const stack = agentStack.current.get(sessionId) || []
@@ -55,7 +81,7 @@ export function useAgentTracker() {
           }
         }
 
-        if (msg.role === 'tool' && msg.name === 'Agent' && msg.tool_call_id) {
+        if (msg.role === 'tool' && (msg.name === 'Agent' || msg.name === 'task') && msg.tool_call_id) {
           // Agent tool call completed - find and despawn the matching agent
           dispatch({ type: 'COMPLETE_AGENT', id: msg.tool_call_id })
           // Remove from stack

@@ -87,6 +87,7 @@ TOOL_STATE_MAP: dict[str, str] = {
     "WebFetch": "browsing",
     "web_search": "browsing",
     "web_fetch": "browsing",
+    "task": "executing",
 }
 
 
@@ -187,8 +188,8 @@ class AgentSpriteTracker:
 
             idx = len(self.agents) % len(self.AGENT_COLORS)
             sprite = AgentSprite(dir_name, label=label, color_index=idx)
-            # Show completed agents briefly in idle before despawning
-            sprite.state = "idle" if already_ended else "spawning"
+            # Always start as spawning so the agent is visible briefly
+            sprite.state = "spawning"
             self.agents[dir_name] = sprite
 
     def read_agent_messages(self) -> None:
@@ -235,7 +236,7 @@ class AgentSpriteTracker:
                 continue
             try:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
-                if meta.get("end_time") and self.agents[dir_name].state not in ("despawning",):
+                if meta.get("end_time") and self.agents[dir_name].state not in ("despawning", "spawning"):
                     self.agents[dir_name].state = "despawning"
             except (json.JSONDecodeError, OSError):
                 pass
@@ -252,7 +253,7 @@ class AgentSpriteTracker:
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 tool_name = fn.get("name", "") or tc.get("name", "")
-                if tool_name and tool_name != "Agent":
+                if tool_name and tool_name not in ("Agent", "task"):
                     self._ensure_root()
                     self.agents["root"].update_state(tool_name)
 
@@ -293,8 +294,8 @@ class AgentSpriteTracker:
             sprite.advance_frame()
             if sprite.state == "despawning":
                 sprite._despawn_ticks += 1
-                # Remove despawned agents after 8 ticks (~2 seconds)
-                if sprite._despawn_ticks >= 8:
+                # Remove despawned agents after 20 ticks (~5 seconds)
+                if sprite._despawn_ticks >= 20:
                     to_remove.append(aid)
         for aid in to_remove:
             del self.agents[aid]

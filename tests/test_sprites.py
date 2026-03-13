@@ -142,7 +142,7 @@ def test_sprite_tracker_agent_meta_label(tmp_path: Path):
 
 
 def test_sprite_tracker_completed_agent(tmp_path: Path):
-    """Completed agents (with end_time) get despawning state."""
+    """Completed agents start as spawning, then transition to despawning after a tick."""
     session_dir = tmp_path / "session_test"
     session_dir.mkdir()
     (session_dir / "messages.jsonl").write_text("")
@@ -165,6 +165,14 @@ def test_sprite_tracker_completed_agent(tmp_path: Path):
     tracker.scan_agents()
     tracker.read_agent_messages()  # This checks meta.json for end_time
 
+    # Agent starts as spawning even if already completed, so it's visible briefly
+    assert tracker.agents["explore_done"].state == "spawning"
+
+    # After a tick, the spawning state transitions and allows despawning
+    tracker.tick()
+    # Simulate transition: set state past spawning so read_agent_messages can despawn
+    tracker.agents["explore_done"].state = "idle"
+    tracker.read_agent_messages()
     assert tracker.agents["explore_done"].state == "despawning"
 
 

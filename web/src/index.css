@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+/* === Gaming Dark Theme === */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+:root {
+  --neon-cyan: #06b6d4;
+  --neon-purple: #a855f7;
+  --neon-green: #22c55e;
+  --neon-pink: #ec4899;
+  --neon-blue: #3b82f6;
+  --glass-bg: rgba(15, 23, 42, 0.6);
+  --glass-border: rgba(148, 163, 184, 0.08);
+}
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: #0a0a0f;
+  color: #e2e8f0;
+}
+
+#root {
+  display: flex;
+  text-align: left;
+}
+
+/* === Animated Background === */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 60% at 20% 80%, rgba(6, 182, 212, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 80% 20%, rgba(168, 85, 247, 0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 50% at 50% 50%, rgba(15, 23, 42, 0.4) 0%, transparent 100%),
+    linear-gradient(180deg, #0a0a0f 0%, #0f172a 50%, #0a0a0f 100%);
+  animation: gradient-shift 20s ease-in-out infinite alternate;
+}
+
+/* === Glassmorphism === */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-strong {
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+/* === Neon Effects === */
+.neon-text {
+  color: var(--neon-cyan);
+  text-shadow:
+    0 0 7px rgba(6, 182, 212, 0.5),
+    0 0 20px rgba(6, 182, 212, 0.2);
+}
+
+.neon-glow {
+  box-shadow:
+    0 0 15px rgba(6, 182, 212, 0.15),
+    0 0 30px rgba(6, 182, 212, 0.05),
+    inset 0 0 15px rgba(6, 182, 212, 0.03);
+}
+
+.neon-glow-purple {
+  box-shadow:
+    0 0 15px rgba(168, 85, 247, 0.15),
+    0 0 30px rgba(168, 85, 247, 0.05);
+}
+
+/* === Scrollbar === */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.3);
+}
+
+/* === Animations === */
+@keyframes gradient-shift {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(15deg); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.4s ease-out both;
+}
+
+/* === Selection === */
+::selection {
+  background: rgba(6, 182, 212, 0.3);
+  color: #e2e8f0;
+}

@@ -21,6 +21,7 @@ function ArenaFloor() {
 // --- Arena Particles ---
 function ArenaParticles() {
   const ref = useRef<THREE.Points>(null)
+  const elapsed = useRef(0)
   const count = 200
 
   const positions = useMemo(() => {
@@ -41,9 +42,10 @@ function ArenaParticles() {
     return g
   }, [positions])
 
-  useFrame((state) => {
+  useFrame((_state, delta) => {
+    elapsed.current += delta
     if (ref.current) {
-      ref.current.rotation.y = state.clock.elapsedTime * 0.03
+      ref.current.rotation.y = elapsed.current * 0.03
     }
   })
 

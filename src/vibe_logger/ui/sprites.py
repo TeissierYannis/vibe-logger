@@ -82,6 +82,7 @@ TOOL_STATE_MAP: dict[str, str] = {
     "NotebookEdit": "writing",
     "Bash": "executing",
     "bash": "executing",
+    "Agent": "executing",
     "WebSearch": "browsing",
     "WebFetch": "browsing",
     "web_search": "browsing",
@@ -173,21 +174,20 @@ class AgentSpriteTracker:
 
             # Read agent meta.json for label
             label = dir_name.split("_")[0]  # e.g. "explore" from "explore_20260313_..."
+            already_ended = False
             meta_path = agent_entry / "meta.json"
             if meta_path.exists():
                 try:
                     meta = json.loads(meta_path.read_text(encoding="utf-8"))
                     label = meta.get("title", label)
-                    # Check if agent has ended
-                    if meta.get("end_time"):
-                        # Agent already finished, don't show as spawning
-                        pass
+                    already_ended = bool(meta.get("end_time"))
                 except (json.JSONDecodeError, OSError):
                     pass
 
             idx = len(self.agents) % len(self.AGENT_COLORS)
             sprite = AgentSprite(dir_name, label=label, color_index=idx)
-            sprite.state = "spawning"
+            # Show completed agents briefly in idle before despawning
+            sprite.state = "idle" if already_ended else "spawning"
             self.agents[dir_name] = sprite
 
     def read_agent_messages(self) -> None:
@@ -290,8 +290,8 @@ class AgentSpriteTracker:
         to_remove = []
         for aid, sprite in self.agents.items():
             sprite.advance_frame()
-            # Remove despawned agents after 4 ticks (~1 second)
-            if sprite.state == "despawning" and self._tick % 4 == 0:
+            # Remove despawned agents after 8 ticks (~2 seconds)
+            if sprite.state == "despawning" and self._tick % 8 == 0:
                 to_remove.append(aid)
         for aid in to_remove:
             del self.agents[aid]
